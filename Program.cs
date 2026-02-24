@@ -47,7 +47,8 @@ class Program
             try
             {
                 List<string> lines = new List<string>(File.ReadAllLines(filePath));
-                int modificationsCount = 0;
+                int rotationCount = 0;
+                int scalingCount = 0;
 
                 bool inModelSection = false;
                 bool inProperties70 = false;
@@ -89,54 +90,22 @@ class Program
                         {
                             braceDepthProperties += CountChar(line, '{') - CountChar(line, '}');
 
-                            // Look for the Lcl Rotation line
+                            // Check for Lcl Rotation
                             if (trimmed.StartsWith("P:") && trimmed.Contains("\"Lcl Rotation\""))
                             {
-                                Match match = Regex.Match(trimmed,
-                                    @"^P:\s*""Lcl Rotation""\s*,\s*""Lcl Rotation""\s*,\s*""[^""]*""\s*,\s*""([^""]*)""\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*(.+)$");
-
-                                if (match.Success)
+                                if (ProcessLclProperty(lines, ref i, properties70StartIndex,
+                                        "Lcl Rotation", "GeometricRotation", "0,0,0"))
                                 {
-                                    string aValue = match.Groups[1].Value;
-                                    string x = match.Groups[2].Value.Trim();
-                                    string y = match.Groups[3].Value.Trim();
-                                    string z = match.Groups[4].Value.Trim();
-
-                                    string indent = line.Substring(0, line.Length - trimmed.Length);
-
-                                    // Search backwards from the current line to the start of
-                                    // this Properties70 block for an existing GeometricRotation line
-                                    int existingGeoIndex = -1;
-                                    for (int j = i - 1; j > properties70StartIndex; j--)
-                                    {
-                                        string checkTrimmed = lines[j].TrimStart();
-                                        if (checkTrimmed.StartsWith("P:") && checkTrimmed.Contains("\"GeometricRotation\""))
-                                        {
-                                            existingGeoIndex = j;
-                                            break;
-                                        }
-                                    }
-
-                                    if (existingGeoIndex >= 0)
-                                    {
-                                        // Update the existing GeometricRotation line's values
-                                        string geoIndent = lines[existingGeoIndex].Substring(0,
-                                            lines[existingGeoIndex].Length - lines[existingGeoIndex].TrimStart().Length);
-                                        lines[existingGeoIndex] = $"{geoIndent}P: \"GeometricRotation\", \"Vector3D\", \"Vector\", \"\",{x},{y},{z}";
-                                    }
-                                    else
-                                    {
-                                        // Insert a new GeometricRotation line above
-                                        string geometricLine = $"{indent}P: \"GeometricRotation\", \"Vector3D\", \"Vector\", \"\",{x},{y},{z}";
-                                        lines.Insert(i, geometricLine);
-                                        // The current line shifted down by one
-                                        i++;
-                                    }
-
-                                    // Zero out the Lcl Rotation line
-                                    lines[i] = $"{indent}P: \"Lcl Rotation\", \"Lcl Rotation\", \"\", \"{aValue}\",0,0,0";
-
-                                    modificationsCount++;
+                                    rotationCount++;
+                                }
+                            }
+                            // Check for Lcl Scaling
+                            else if (trimmed.StartsWith("P:") && trimmed.Contains("\"Lcl Scaling\""))
+                            {
+                                if (ProcessLclProperty(lines, ref i, properties70StartIndex,
+                                        "Lcl Scaling", "GeometricScaling", "1,1,1"))
+                                {
+                                    scalingCount++;
                                 }
                             }
 
@@ -158,16 +127,18 @@ class Program
                     }
                 }
 
-                if (modificationsCount > 0)
+                int totalModifications = rotationCount + scalingCount;
+
+                if (totalModifications > 0)
                 {
                     string outputFileName = Path.GetFileNameWithoutExtension(filePath) + "_fixed.fbx";
                     string outputPath = Path.Combine(Path.GetDirectoryName(filePath)!, outputFileName);
                     File.WriteAllLines(outputPath, lines);
-                    Console.WriteLine($"  {modificationsCount} rotation(s) moved to GeometricRotation. Saved: {outputFileName}");
+                    Console.WriteLine($"  {rotationCount} rotation(s) and {scalingCount} scaling(s) moved to Geometric properties. Saved: {outputFileName}");
                 }
                 else
                 {
-                    Console.WriteLine("  No 'Lcl Rotation' entries found to modify.");
+                    Console.WriteLine("  No 'Lcl Rotation' or 'Lcl Scaling' entries found to modify.");
                 }
             }
             catch (Exception ex)
@@ -181,9 +152,91 @@ class Program
     }
 
     /// <summary>
+    /// Processes a Lcl property line (Rotation or Scaling), moving its values to the
+    /// corresponding Geometric property and zeroing/resetting the original.
+    /// </summary>
+    /// <param name="lines">The full list of file lines.</param>
+    /// <param name="currentIndex">Reference to the current line index (may shift on insert).</param>
+    /// <param name="properties70StartIndex">The start index of the Properties70 block.</param>
+    /// <param name="lclName">The Lcl property name, e.g. "Lcl Rotation" or "Lcl Scaling".</param>
+    /// <param name="geometricName">The Geometric property name, e.g. "GeometricRotation" or "GeometricScaling".</param>
+    /// <param name="defaultValues">The default/reset values, e.g. "0,0,0" for rotation or "1,1,1" for scaling.</param>
+    /// <returns>True if a modification was made.</returns>
+    static bool ProcessLclProperty(List<string> lines, ref int currentIndex, int properties70StartIndex,
+        string lclName, string geometricName, string defaultValues)
+    {
+        string line = lines[currentIndex];
+        string trimmed = line.TrimStart();
+
+        // Build regex to match: P: "Lcl Rotation", "Lcl Rotation", "", "A+", X, Y, Z
+        string escapedName = Regex.Escape(lclName);
+        string pattern = $@"^P:\s*""{escapedName}""\s*,\s*""{escapedName}""\s*,\s*""[^""]*""\s*,\s*""([^""]*)""\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*(.+)$";
+
+        Match match = Regex.Match(trimmed, pattern);
+        if (!match.Success)
+            return false;
+
+        string aValue = match.Groups[1].Value;
+        string x = match.Groups[2].Value.Trim();
+        string y = match.Groups[3].Value.Trim();
+        string z = match.Groups[4].Value.Trim();
+
+        string indent = line.Substring(0, line.Length - trimmed.Length);
+
+        // Search backwards for an existing Geometric line in this Properties70 block
+        int existingGeoIndex = -1;
+        for (int j = currentIndex - 1; j > properties70StartIndex; j--)
+        {
+            string checkTrimmed = lines[j].TrimStart();
+            if (checkTrimmed.StartsWith("P:") && checkTrimmed.Contains($"\"{geometricName}\""))
+            {
+                existingGeoIndex = j;
+                break;
+            }
+        }
+
+        // Also search forwards in case the Geometric line is below the Lcl line
+        if (existingGeoIndex < 0)
+        {
+            for (int j = currentIndex + 1; j < lines.Count; j++)
+            {
+                string checkTrimmed = lines[j].TrimStart();
+                // Stop if we've left the Properties70 block (closing brace)
+                if (checkTrimmed.StartsWith("}"))
+                    break;
+                if (checkTrimmed.StartsWith("P:") && checkTrimmed.Contains($"\"{geometricName}\""))
+                {
+                    existingGeoIndex = j;
+                    break;
+                }
+            }
+        }
+
+        if (existingGeoIndex >= 0)
+        {
+            // Update the existing Geometric line's values in place
+            string geoIndent = lines[existingGeoIndex].Substring(0,
+                lines[existingGeoIndex].Length - lines[existingGeoIndex].TrimStart().Length);
+            lines[existingGeoIndex] = $"{geoIndent}P: \"{geometricName}\", \"Vector3D\", \"Vector\", \"\",{x},{y},{z}";
+        }
+        else
+        {
+            // Insert a new Geometric line above the Lcl line
+            string geometricLine = $"{indent}P: \"{geometricName}\", \"Vector3D\", \"Vector\", \"\",{x},{y},{z}";
+            lines.Insert(currentIndex, geometricLine);
+            // The current Lcl line shifted down by one
+            currentIndex++;
+        }
+
+        // Zero/reset the Lcl line
+        lines[currentIndex] = $"{indent}P: \"{lclName}\", \"{lclName}\", \"\", \"{aValue}\",{defaultValues}";
+
+        return true;
+    }
+
+    /// <summary>
     /// Checks whether an FBX file is ASCII format.
     /// Binary FBX files start with the magic bytes "Kaydara FBX Binary  \0".
-    /// ASCII FBX files start with a readable header line like "; FBX ...".
     /// </summary>
     static bool IsAsciiFbx(string filePath)
     {
