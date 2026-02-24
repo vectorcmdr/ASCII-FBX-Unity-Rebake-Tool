@@ -1,12 +1,14 @@
-# FBX-ASCII-Rebase-Rotation-Tool
+# FBX-ASCII-Unity-Rotation-Tool
 
-A simple console tool to rebase ASCII FBX rotations via packing ``"Lcl Rotation"`` into ``"GeometricRotation"`` and reseting ``"Lcl Rotation"``.
+A simple console tool to rebase ASCII FBX (and Unity prefab) file local rotations and scales via packing ``"Lcl Rotation"`` and ``Lcl Scaling`` into ``"Geometric"`` properties and reseting the original locals.
 
-Especially useful for 'fixing' submesh rotations for merged FBX files in situations where auto-parsing AI junk tools *cough* _**Unity Asset Store**_ *cough* aren't able to discern that submeshes might want to be rotated to their real values, not a rebased `0,0,0`.
+It also updates Unity prefab files to reset the ``Transform:`` property ``m_LocalRotation`` value to `0,0,0` and ``m_LocalScale`` value to `0,0,0,1`.
 
-It will check all .fbx files in the same directory as the tool, discern if they are ASCII format and if so it will proceed to check the gemoetry nodes within for a Local Rotation value (``"Lcl Rotation"``) and pack that into it's Geometry Rotation ``"GeometricRotation"`` value instead (or create one if not present).
+Especially useful for 'fixing' submesh rotations for merged FBX files in situations where auto-parsing AI junk tools *cough* _**Unity Asset Store**_ *cough* aren't able to discern that submeshes might want to be rotated to their real values, not a rebased `0,0,0`/`0,0,0,1`.
 
-It will then reset the Local Rotation to ``0,0,0 ZXY`` and save a copy of the file with `_fixed` appended to the filename.
+It will check all .fbx *(and check if they are ASCII format)* and .prefab files in the same directory as the tool, and proceed to check the gemoetry/transform nodes within and update them per above.
+
+It will then reset the Local Rotation to ``0,0,0``/``0,0,0,1`` and Local Scale to ``1,1,1`` and save a copy of the files with `_fixed` appended to the filenames.
 
 <br>
 
