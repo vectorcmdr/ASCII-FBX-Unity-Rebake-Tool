@@ -3,7 +3,7 @@
 A simple(?) console tool to rebase nested and merged **ASCII** FBX (and Unity prefab) files.<br>
 It's got a fairly specific use, but if you need it you need it.
 
-It handles local rotations and scales via packing ``"Lcl Rotation"`` and ``Lcl Scaling`` into ``"Geometric"`` properties and reseting the original locals.<br>
+It handles local rotations and scales via packing ``Lcl Rotation`` and ``Lcl Scaling`` into ``Geometric`` properties and reseting the original locals.<br>
 It also checks for specific rotation clamping, floating point (near-zero) issues, scale inversions (mirroring before merging) and other fringe cases and deals with them by catching and convering, mirroring verts, reversing polygon windings, etc.
 
 Any Unity prefab files in the directory also have their ``Transform:`` property ``m_LocalRotation`` value set to `0,0,0,1` and ``m_LocalScale`` value set to `1,1,1` to accomodate the mesh changes.
