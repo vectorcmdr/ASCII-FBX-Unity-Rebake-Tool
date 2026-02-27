@@ -9,6 +9,8 @@ It does this by processesing ASCII format FBX files in it's run directory and ba
 It also processes Unity prefab (YAML) files that correspond to the FBX files and resets ``m_LocalRotation`` to identity quaternion, ``m_LocalScale`` to ``(1,1,1)``, ``m_LocalEulerAnglesHint`` to ``(0,0,0)``.
 The modified output files are created in a subdirectory named "baked".
 
+_...really earning my pseudonym with this one..._
+
 ### Purpose:
 It's was originally intended for use on merged meshes where child geometry/submeshes have their original rotations and scales (including engine managed inversion) within a reset parent.
 It's got a fairly specific use, but if you need it you need it.
